@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Chat with Ollama</title>
+</head>
+<body>
+    <div id="chat-container">
+        <div id="chat-header">Interactive Chat with Ollama</div>
+
+        <!-- Department and Policy Dropdowns -->
+        <div id="dropdown-area">
+            <label for="departments">Choose a Department:</label>
+            <select id="departments">
+                <option value="" id="defaultDepartment">Select a department...</option>
+            </select>
+
+            <label for="policyDropdown">Choose Policies:</label>
+            <select id="policyDropdown" disabled multiple>
+                <option value="" id="defaultDepartment">Select policies...</option>
+            </select>
+
+            <p>Selected Policies: <span id="policiesSelected"></span></p>
+        </div>
+        <!-- Chat History -->
+        <div id="chatBot"></div>
+        <!-- Input Area -->
+        <div id="input-area">
+            <input type="text" id="queryInput" placeholder="Type your message here..." />
+            <button id="sendButton">Send</button>
+        </div>
+    </div>
+
+    <script>
+        const departmentsDropdown = document.getElementById("departments");
+        const policyDropdown = document.getElementById("policyDropdown");
+        const policiesSelected = document.getElementById("policiesSelected");
+        const querySendButton = document.getElementById("sendButton");
+        const queryInput = document.getElementById("queryInput");
+        const chatBot = document.getElementById("chatBot");
+        let selectedDepartmentId = "";
+        let selectedPolicies = [];
+
+        function toggleSelection(optionElement, itemValue){
+            if (selectedPolicies.includes(itemValue)) {
+                selectedPolicies.splice(selectedPolicies.indexOf(itemValue), 1);
+                optionElement.classList.remove("selected");
+            } else {
+                selectedPolicies.push(itemValue);
+                optionElement.classList.add("selected");
+            }
+            policiesSelected.textContent = selectedPolicies.join(", ");
+        }
+
+        function addMessage(sender, text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            const messageText = document.createElement('p');
+            messageText.innerHTML = text; // Use innerHTML to parse HTML
+            messageDiv.appendChild(messageText);
+            chatBot.appendChild(messageDiv);
+            chatBot.scrollTop = chatBot.scrollHeight; // Auto-scroll to the latest message
+
+        }
+
+        function formatResponse(responseText) {
+            const points = responseText.match(/\d+\.\s.*?(?=\d+\.|$)/gs);
+            if (points) {
+                return `<ul class="response-list">${points.map(point => `<li>${point.trim()}</li>`).join('')}</ul>`;
+            }
+            return responseText;
+        }
+
+        fetch('/departments')
+        .then(response => response.json())
+        .then(departments => {
+            departments.forEach(department => {
+                const option = document.createElement('option');
+                option.value = department;
+                option.textContent = department.toUpperCase();
+                departmentsDropdown.appendChild(option);
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching departments:', error);
+            alert('Failed to load department options.');
+        });
+
+        departmentsDropdown.addEventListener('change', function () {
+            const departmentId = this.value;
+            console.log(departmentId);
+            if (departmentId !== "" || !departmentId){
+                policyDropdown.disabled = false;
+                
+            }
+            if (departmentId === ""  ){
+                policyDropdown.disabled = true;
+                policyDropdown.innerHTML='<option value="" id="defaultDepartment">Select policies...</option>'
+                selectedPolicies = [];
+                policiesSelected.textContent = selectedPolicies;
+                selectedDepartmentId = departmentId;
+                return
+            }
+            if (departmentId === selectedDepartmentId) {
+                return
+            }else {
+                policyDropdown.innerHTML='<option value="" id="defaultDepartment">Select policies...</option>'
+                selectedPolicies = [];
+                policiesSelected.textContent = selectedPolicies;
+                fetch(`/${departmentId}/policies`)
+                .then(response => response.json())
+                .then(policies => {
+                    policies.forEach(policy => {
+                        const policyOption = document.createElement('option');
+                        policyOption.value = policy;
+                        policyOption.textContent = policy.toUpperCase();
+                        policyOption.addEventListener("dblclick", () => toggleSelection(policyOption, policy));
+                        policyDropdown.appendChild(policyOption);
+                    })
+                })
+                .catch(error => {
+                    console.error('Error fetching policies:', error);
+                    alert('Failed to load policies.');
+                });
+
+                selectedDepartmentId = departmentId;
+            }
+            
+        });
+
+        querySendButton.addEventListener('click', function () {
+            const userMessage = queryInput.value.trim();
+
+            const department = departmentsDropdown.value;
+
+            const policiesList = selectedPolicies;
+
+
+            if (userMessage === '') return;
+
+            // Add user's message to the chat
+            addMessage('user', userMessage);
+
+            // Clear input field
+            queryInput.value = '';
+
+            // Show bot is typing
+            const typingIndicator = document.createElement('div');
+            typingIndicator.className = 'message bot';
+            typingIndicator.innerHTML = '<p>Typing...</p>';
+            chatBot.appendChild(typingIndicator);
+            
+            fetch('/ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: userMessage,
+                    department: department,
+                    policies: policiesList // Send policies as an array
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                chatBot.removeChild(typingIndicator);
+                const formattedResponse = formatResponse(data.response);
+                addMessage('bot', formattedResponse);
+            })
+            .catch(error => {
+                console.log('bot', `An error occurred: ${error}`);
+                chatBot.removeChild(typingIndicator);
+                addMessage('bot', `An error occurred: ${error}`);
+            });
+            
+        });
+
+
+
+    </script>
+</body>
+</html>

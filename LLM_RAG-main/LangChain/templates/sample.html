@@ -1,0 +1,333 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat with Ollama</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        form { max-width: 600px; margin: 0 auto; }
+        input, textarea, select { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; }
+        button { padding: 10px 20px; background-color: #007BFF; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        .response { margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px; }
+        .response-error { background-color: #ffdddd; }
+        .dropdown-container { display: flex; flex-direction: column; }
+        .dropdown-container select { margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+    <h1>Chat with Ollama</h1>
+
+    <!-- Department Select Dropdowns -->
+    
+
+    <!-- Form for Question Submission -->
+    <form id="queryForm" enctype="multipart/form-data">
+        <div class="dropdown-container">
+            <label for="departments">Choose a Department:</label>
+            <select name="departments" id="departments">
+                <option value="">Select a department...</option>
+            </select>
+    
+            <label for="policies" id="policy-label" style="display:none;">Choose a Policy:</label>
+            <select id="policies" name="policies" style="display:none;">
+                <option value="">Select a policy...</option>
+            </select>
+        </div>
+        <label for="query">Your Question:</label>
+        <textarea name="query" id="query" rows="4" required></textarea>
+        <button type="submit">Submit</button>
+    </form>
+
+    <!-- Textbox for Response (Below the Submit Button) -->
+    <label for="responseBox">Response:</label>
+    <textarea id="responseBox" rows="4" readonly></textarea>
+
+    <script>
+        fetch('/departments')
+            .then(response => response.json())
+            .then(departments => {
+                // Get the departments dropdown element
+                const dropdown = document.getElementById('departments');
+
+                // Clear existing options and add default option
+                dropdown.innerHTML = '<option value="">Select a department...</option>';
+
+                // Loop through each department and create an option element
+                departments.forEach(department => {
+                    const option = document.createElement('option');
+                    option.value = department;  // The value to be sent in the form
+                    option.textContent = department.toUpperCase();  // Convert department name to uppercase
+                    dropdown.appendChild(option);  // Append the option to the dropdown
+                });
+            })
+            .catch(error => {
+                console.error('Error fetching departments:', error);
+                alert('Failed to load department options');
+            });
+
+        // Event listener for when a department is selected
+        document.getElementById('departments').addEventListener('change', function() {
+            const departmentId = this.value;
+
+            // If no department is selected, hide the policy dropdown
+            if (!departmentId) {
+                document.getElementById('policies').style.display = 'none';
+                document.getElementById('policy-label').style.display = 'none';
+                return;
+            }
+
+            // Show the policy dropdown
+            document.getElementById('policies').style.display = 'block';
+            document.getElementById('policy-label').style.display = 'block';
+
+            // Fetch policies for the selected department from /<department_id>/policies route
+            fetch(`/${departmentId}/policies`)
+                .then(response => response.json())
+                .then(policies => {
+                    const policyDropdown = document.getElementById('policies');
+
+                    // Clear existing options
+                    policyDropdown.innerHTML = '<option value="">Select a policy...</option>';
+
+                    // Add each policy as an option
+                    policies.forEach(policy => {
+                        const option = document.createElement('option');
+                        option.value = policy;  // The value is the policy name
+                        option.textContent = policy;  // Display the policy name
+                        policyDropdown.appendChild(option);  // Append to the policies dropdown
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching policies:', error);
+                    alert('Failed to load policies');
+                });
+        });
+
+        document.getElementById('queryForm').onsubmit = function(event) {
+            event.preventDefault(); // Prevent the form from actually submitting
+    
+            // Show loading message in the response box (for user feedback)
+            document.getElementById('responseBox').value = 'Loading...';
+    
+            // Prepare the form data
+            var formData = new FormData(this);
+    
+            // Send the data via AJAX to the Flask server
+            fetch('/ask', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Check if the response contains an error
+                if (data.error) {
+                    document.getElementById('responseBox').value = 'Error: ' + data.error;
+                } else {
+                    document.getElementById('responseBox').value = data.response;  // Display response
+                }
+            })
+            .catch(error => {
+                document.getElementById('responseBox').value = 'An error occurred: ' + error;
+            });
+        };
+    </script>
+    
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<script>
+    const chatBox = document.getElementById('chat-box');
+    const queryInput = document.getElementById('query');
+    const sendButton = document.getElementById('sendButton');
+    const departmentsDropdown = document.getElementById('departments');
+    let previousDepartmentValue = null;
+    const dropdown = document.getElementById("dropdown");
+    const selectedItemsContainer = document.getElementById("selectedItems");
+
+    function renderDropdown(policies){
+        policies.forEach((item, index) => {
+            const option = document.createElement("div");
+            option.classList.add("dropdown-item");
+            option.textContent = item;
+            option.dataset.value = item;
+
+            // Attach double-click event listener
+            option.addEventListener("dblclick", () => toggleSelection(option, item));
+
+            dropdown.appendChild(option);
+        });
+    }
+
+    function toggleSelection(optionElement, itemValue) {
+        if (selectedItems.includes(itemValue)) {
+            // If already selected, remove from the list
+            selectedItems.splice(selectedItems.indexOf(itemValue), 1);
+            optionElement.classList.remove("selected");
+        } else {
+            // If not selected, add to the list
+            selectedItems.push(itemValue);
+            optionElement.classList.add("selected");
+        }
+
+        // Update selected items display
+        updateSelectedItemsDisplay();
+    }
+
+    function updateSelectedItemsDisplay() {
+        selectedItemsContainer.textContent = selectedItems.join(", ");
+    }
+
+
+    // Fetch departments on page load
+    fetch('/departments')
+        .then(response => response.json())
+        .then(departments => {
+            // Populate the departments dropdown
+            departments.forEach(department => {
+                const option = document.createElement('option');
+                option.value = department;
+                option.textContent = department.toUpperCase();
+                departmentsDropdown.appendChild(option);
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching departments:', error);
+            alert('Failed to load department options.');
+        });
+
+    // Fetch policies when a department is selected
+    departmentsDropdown.addEventListener('change', function () {
+        const departmentId = this.value;
+        // if (!departmentId) {
+        //     // Disable and hide policy dropdown if no department is selected
+            
+        //     return;
+        // }
+
+        // // Enable and show the policy dropdown after selecting a department
+        // policiesDropdown.disabled = false;
+        // policiesDropdown.style.display = 'block';
+        // policyLabel.style.display = 'block';
+
+        // Fetch policies for the selected department
+        fetch(`/${departmentId}/policies`)
+            .then(response => response.json())
+            .then(policies => {
+                // Clear and populate the policy dropdown
+                if (departmentId !== previousDepartmentValue) {
+                    // policiesDropdown.replaceChildren();
+                    previousDepartmentValue = departmentId;
+                }
+                renderDropdown(policies);
+                // policies.forEach(policy => {
+                //     const option = document.createElement('option');
+                //     option.value = policy;
+                //     option.textContent = policy;
+                //     policiesDropdown.appendChild(option);
+                    
+                // });
+            })
+            .catch(error => {
+                console.error('Error fetching policies:', error);
+                alert('Failed to load policies.');
+            });
+    });
+
+
+    // Add a message to the chat box
+    function addMessage(sender, text) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${sender}`;
+        const messageText = document.createElement('p');
+        messageText.innerHTML = text; // Use innerHTML to parse HTML
+        messageDiv.appendChild(messageText);
+        chatBox.appendChild(messageDiv);
+        chatBox.scrollTop = chatBox.scrollHeight; // Auto-scroll to the latest message
+    }
+
+    // Format response as numbered list
+    function formatResponse(responseText) {
+        const points = responseText.match(/\d+\.\s.*?(?=\d+\.|$)/gs);
+        if (points) {
+            return `<ul class="response-list">${points.map(point => `<li>${point.trim()}</li>`).join('')}</ul>`;
+        }
+        return responseText;
+    }
+
+    // Handle sending the message
+    function sendMessage() {
+        const userMessage = queryInput.value.trim();
+        const selectedDepartment = departmentsDropdown.value;
+        console.log(selectedItemsContainer)
+        // const selectedPolicies = Array.from(policiesDropdown.selectedOptions).map(option => option.value);
+
+        // if (userMessage === '') return;
+
+        // // Add user's message to the chat
+        // addMessage('user', userMessage);
+
+        // // Clear input field
+        // queryInput.value = '';
+
+        // // Show bot is typing
+        // const typingIndicator = document.createElement('div');
+        // typingIndicator.className = 'message bot';
+        // typingIndicator.innerHTML = '<p>Typing...</p>';
+        // chatBox.appendChild(typingIndicator);
+        // console.log(policiesDropdown.selectedOptions);
+        // Send data to backend
+        // fetch('/ask', {
+        //     method: 'POST',
+        //     headers: { 'Content-Type': 'application/json' },
+        //     body: JSON.stringify({
+        //         query: userMessage,
+        //         department: selectedDepartment,
+        //         policies: selectedPolicies // Send policies as an array
+        //     })
+        // })
+        // .then(response => response.json())
+        // .then(data => {
+        //     // Remove typing indicator
+        //     chatBox.removeChild(typingIndicator);
+
+        //     // Format and display bot response
+        //     const formattedResponse = formatResponse(data.response);
+        //     addMessage('bot', formattedResponse);
+        // })
+        // .catch(error => {
+        //     chatBox.removeChild(typingIndicator);
+        //     addMessage('bot', `An error occurred: ${error}`);
+        // });
+    }
+
+    // Send message on button click
+    sendButton.addEventListener('click', sendMessage);
+
+    // Send message on Enter key press
+    queryInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            sendMessage();
+        }
+    });
+</script>
